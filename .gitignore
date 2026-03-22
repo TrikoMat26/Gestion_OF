@@ -1,0 +1,8 @@
+# PowerShell
+*.log
+_logs_exec/
+*.txt
+!README.md
+!Liste_OF.txt
+!Global_OF_Registry.json
+!OF_Registry.json
