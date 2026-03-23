@@ -1,4 +1,4 @@
-﻿<#
+<#
     Gestion_OF_MultiClients.ps1
     Outil autonome pour la gestion des Ordres de Fabrication (OF) et Numéros de Série (SN)
     Support multi-clients.
@@ -73,6 +73,21 @@ Function Find-OFBySN_Global($registry, $sn) {
         }
     }
     return $null
+}
+
+Function Search-OFBySN_Partial($registry, $snToFind) {
+    # Retourne un tableau de correspondances partielles @{ Client = "..."; OF = "..."; SN = "..." }
+    $results = @()
+    foreach ($client in $registry.Keys) {
+        foreach ($of in $registry[$client].Keys) {
+            foreach ($s in $registry[$client][$of]) {
+                if ($s -match [regex]::Escape($snToFind)) { 
+                    $results += @{ Client=$client; OF=$of; SN=$s }
+                }
+            }
+        }
+    }
+    return $results
 }
 
 Function Expand-SNRange($inputText) {
@@ -548,27 +563,82 @@ $btnDelSN.Add_Click({
 $btnSearch.Add_Click({
     $snToFind = $txtSearchSN.Text.Trim()
     if ($snToFind) {
-        $found = Find-OFBySN_Global $global:currentRegistry $snToFind
-        if ($found) {
-            # Select Client
-            $idxC = $lstClient.FindString($found.Client)
-            if ($idxC -ge 0) { $lstClient.SelectedIndex = $idxC }
-            
-            # Select OF
-            $idxO = $lstOF.FindString($found.OF)
-            if ($idxO -ge 0) { $lstOF.SelectedIndex = $idxO }
-            
-            # Select SN
-            $idxS = $lstSN.FindString($snToFind)
-            if ($idxS -ge 0) { $lstSN.SelectedIndex = $idxS; $lstSN.Focus() }
-            
-            $statusLabel.Text = "SN Trouvé : Client $($found.Client) / OF $($found.OF)"
-            $statusLabel.ForeColor = $ColorSuccess
-        }
-        else {
-            $statusLabel.Text = "SN $snToFind introuvable dans la base globale."
+        $foundList = @(Search-OFBySN_Partial $global:currentRegistry $snToFind)
+        
+        if ($foundList.Count -eq 0) {
+            $statusLabel.Text = "SN $snToFind introuvable."
             $statusLabel.ForeColor = $ColorDanger
             [System.Windows.Forms.MessageBox]::Show("SN non trouvé dans la base globale.", "Résultat")
+        }
+        else {
+            $selectedObj = $null
+            
+            if ($foundList.Count -eq 1) {
+                $selectedObj = $foundList[0]
+            }
+            else {
+                # Plusieurs résultats
+                $searchForm = New-Object Windows.Forms.Form
+                $searchForm.Text = "Résultats de recherche ($($foundList.Count))"
+                $searchForm.Size = New-Object Drawing.Size(400, 300)
+                $searchForm.StartPosition = "CenterParent"
+                $searchForm.FormBorderStyle = "FixedDialog"
+                $searchForm.MaximizeBox = $false
+                $searchForm.MinimizeBox = $false
+                
+                $lblInfo = New-Object Windows.Forms.Label
+                $lblInfo.Text = "Plusieurs correspondances trouvées. Double-cliquez pour sélectionner :"
+                $lblInfo.Dock = "Top"
+                $lblInfo.Height = 35
+                $lblInfo.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+                $lblInfo.Padding = New-Object Windows.Forms.Padding(5)
+                
+                $lstResults = New-Object Windows.Forms.ListBox
+                $lstResults.Dock = "Fill"
+                $lstResults.Font = New-Object System.Drawing.Font("Consolas", 10.5)
+                $lstResults.BorderStyle = "FixedSingle"
+                
+                foreach ($item in $foundList) {
+                    [void]$lstResults.Items.Add("[$($item.Client)] $($item.OF) -> $($item.SN)")
+                }
+                
+                $lstResults.Add_DoubleClick({
+                    if ($lstResults.SelectedIndex -ge 0) {
+                        $searchForm.DialogResult = "OK"
+                        $searchForm.Close()
+                    }
+                })
+                
+                $searchForm.Controls.Add($lstResults)
+                $searchForm.Controls.Add($lblInfo)
+                
+                $res = $searchForm.ShowDialog($Form)
+                if ($res -eq "OK" -and $lstResults.SelectedIndex -ge 0) {
+                    $selectedObj = $foundList[$lstResults.SelectedIndex]
+                }
+            }
+            
+            if ($selectedObj) {
+                # Select Client
+                $idxC = $lstClient.FindString($selectedObj.Client)
+                if ($idxC -ge 0 -and $lstClient.SelectedIndex -ne $idxC) { $lstClient.SelectedIndex = $idxC }
+                
+                # Select OF
+                $idxO = $lstOF.FindString($selectedObj.OF)
+                if ($idxO -ge 0 -and $lstOF.SelectedIndex -ne $idxO) { $lstOF.SelectedIndex = $idxO }
+                
+                # Select SN
+                $idxS = $lstSN.FindStringExact($selectedObj.SN)
+                if ($idxS -lt 0) { $idxS = $lstSN.FindString($selectedObj.SN) }
+                if ($idxS -ge 0) { 
+                    $lstSN.SelectedIndex = $idxS
+                    $lstSN.TopIndex = [math]::Max(0, $idxS - 5)
+                    $lstSN.Focus() 
+                }
+                
+                $statusLabel.Text = "SN Trouvé : Client $($selectedObj.Client) / OF $($selectedObj.OF)"
+                $statusLabel.ForeColor = $ColorSuccess
+            }
         }
     }
 })
