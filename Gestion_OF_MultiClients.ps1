@@ -1,4 +1,4 @@
-<#
+﻿<#
     Gestion_OF_MultiClients.ps1
     Outil autonome pour la gestion des Ordres de Fabrication (OF) et Numéros de Série (SN)
     Support multi-clients.
