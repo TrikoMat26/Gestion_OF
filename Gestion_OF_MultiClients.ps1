@@ -1,4 +1,4 @@
-﻿<#
+<#
     Gestion_OF_MultiClients.ps1
     Outil autonome pour la gestion des Ordres de Fabrication (OF) et Numéros de Série (SN)
     Support multi-clients.
@@ -81,7 +81,7 @@ Function Search-OFBySN_Partial($registry, $snToFind) {
     foreach ($client in $registry.Keys) {
         foreach ($of in $registry[$client].Keys) {
             foreach ($s in $registry[$client][$of]) {
-                if ($s -match [regex]::Escape($snToFind)) { 
+                if ($s -match ([regex]::Escape($snToFind) + '$')) { 
                     $results += @{ Client=$client; OF=$of; SN=$s }
                 }
             }
